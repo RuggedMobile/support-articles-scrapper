@@ -105,218 +105,42 @@ async function ensureImageDir() {
 // Extract article links from the Getting Started section
 async function getArticleLinks(page) {
   console.log("🔍 Discovering articles from KB page...");
+  console.log("Page:", page);
 
   await page.goto(CONFIG.kbUrl, { waitUntil: "networkidle0", timeout: 30000 });
 
-  // close after 10 seconds of no activity
-  let lastActivity = Date.now();
-  const activityInterval = setInterval(() => {
-    if (Date.now() - lastActivity > 10000) {
-      console.log("⏲️  No activity for 10 seconds, closing browser");
-      browser.close().catch(() => {});
-      clearInterval(activityInterval);
+  const html = await page.content();
+  const $ = cheerio.load(html);
+
+  const articles = [];
+
+  // Find the Getting Started section and extract article links
+  // Adjust selectors based on actual HTML structure
+  $("a").each((i, elem) => {
+    const href = $(elem).attr("href");
+    const text = $(elem).text().trim();
+
+    if (href && href.includes("/article/") && text) {
+      const fullUrl = href.startsWith("http")
+        ? href
+        : `${CONFIG.baseUrl}${href}`;
+      articles.push({
+        url: fullUrl,
+        title: text,
+      });
     }
-  }, 5000);
+  });
 
-  // const html = await page.content();
-  // const $ = cheerio.load(html);
+  // Remove duplicates
+  const uniqueArticles = Array.from(
+    new Map(articles.map((a) => [a.url, a])).values()
+  );
 
-  // const articles = [];
-
-  // // Find the Getting Started section and extract article links
-  // // Adjust selectors based on actual HTML structure
-  // $("a").each((i, elem) => {
-  //   const href = $(elem).attr("href");
-  //   const text = $(elem).text().trim();
-
-  //   if (href && href.includes("/article/") && text) {
-  //     const fullUrl = href.startsWith("http")
-  //       ? href
-  //       : `${CONFIG.baseUrl}${href}`;
-  //     articles.push({
-  //       url: fullUrl,
-  //       title: text,
-  //     });
-  //   }
-  // });
-
-  // // Remove duplicates
-  // const uniqueArticles = Array.from(
-  //   new Map(articles.map((a) => [a.url, a])).values()
-  // );
-
-  // console.log(`✅ Found ${uniqueArticles.length} articles`);
-  // return uniqueArticles;
+  console.log(`✅ Found ${uniqueArticles.length} articles`);
+  return [uniqueArticles[0]];
 }
 
-// Attempt to login using credentials from env vars
-// async function login(page) {
-//   const username = process.env.LOGIN_USERNAME;
-//   const password = process.env.LOGIN_PASSWORD;
-//   if (!username || !password) {
-//     console.log('ℹ️  LOGIN_USERNAME or LOGIN_PASSWORD not set; skipping login');
-//     return true;
-//   }
-
-//   const loginUrl = process.env.LOGIN_URL || `${CONFIG.baseUrl}/login`;
-//   console.log(`🔐 Attempting login at ${loginUrl}`);
-
-//   try {
-//     await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-
-//     // Try to find and fill username
-//     const usernameSelector = process.env.LOGIN_USERNAME_SELECTOR || CONFIG.login.usernameSelector;
-//     const passwordSelector = process.env.LOGIN_PASSWORD_SELECTOR || CONFIG.login.passwordSelector;
-//     const submitSelector = process.env.LOGIN_SUBMIT_SELECTOR || CONFIG.login.submitSelector;
-
-//     // Wait for either username
-//     await page.waitForSelector(usernameSelector, { timeout: 5000 }).catch(() => { });
-
-//     // Type into username (if present)
-//     const userHandle = await page.$(usernameSelector);
-//     console.log('Username handle -->', userHandle);
-
-//     if (userHandle) {
-//       await userHandle.click({ clickCount: 3 });
-//       await userHandle.type(username, { delay: 50 });
-//     } else {
-//       console.warn('  ⚠️ Username input not found with selectors:', usernameSelector);
-//     }
-//     // After typing username, some sites show the password input only after
-//     // submitting the username (two-step flows). Try to detect and handle that.
-//     let passHandle = await page.$(passwordSelector);
-
-//     if (!passHandle) {
-//       console.log('  ℹ️ Password input not immediately present — attempting to reveal it (click Next / press Enter)');
-
-//       // Try clicking the submit/next button if available
-//       const submitHandle = await page.$(submitSelector);
-//       if (submitHandle) {
-//         try {
-//           await Promise.all([
-//             page
-//               .waitForSelector(passwordSelector, {
-//                 visible: true,
-//                 timeout: 8000,
-//               })
-//               .catch(() => {}),
-//             submitHandle.click().catch(() => {}),
-//           ]);
-//           passHandle = await page.$(passwordSelector);
-//           if (passHandle)
-//             console.log(
-//               "  ℹ️ Password input appeared after clicking submit/next"
-//             );
-
-//           // Get all cookies from secure.appenate.com
-//           const cookies = await page.cookies();
-//           console.log(`📦 Got ${cookies.length} cookies from login`);
-
-//           // Set cookies for help.appenate.com domain
-//           const helpDomainCookies = cookies.map((cookie) => ({
-//             ...cookie,
-//             domain: ".appenate.com", // Parent domain - will work on all subdomains
-//           }));
-
-//           await page.setCookie(...helpDomainCookies);
-//           console.log("✅ Cookies set for help.appenate.com");
-
-//           // NOW navigate to the help subdomain to test the cookies
-//           console.log("🔄 Navigating to help.appenate.com to verify login...");
-//           await page.goto(CONFIG.kbUrl, {
-//             waitUntil: "networkidle0",
-//             timeout: 30000,
-//           });
-
-//           // Debug: Check if still logged in
-//           const currentUrl = page.url();
-//           const pageContent = await page.content();
-//           const isLoggedIn =
-//             !currentUrl.includes("LogOn") &&
-//             !currentUrl.includes("login") &&
-//             !pageContent.toLowerCase().includes("you need to sign in");
-
-//           console.log(`🔍 Current URL: ${currentUrl}`);
-//           console.log(`🔍 Logged in status on help page: ${isLoggedIn}`);
-
-//           if (!isLoggedIn) {
-//             console.warn(
-//               "⚠️  Still not logged in on help page. The cookies may not be working across subdomains."
-//             );
-//           }
-
-//           return true;
-//         } catch (e) {
-//           // ignore
-//         }
-//       }
-
-//       // If still not found, press Enter in the username field as a fallback
-//       if (!passHandle && userHandle) {
-//         try {
-//           await Promise.all([
-//             page.waitForSelector(passwordSelector, { visible: true, timeout: 8000 }).catch(() => {}),
-//             userHandle.press('Enter').catch(() => {}),
-//           ]);
-//           passHandle = await page.$(passwordSelector);
-//           if (passHandle) console.log('  ℹ️ Password input appeared after pressing Enter in username field');
-//         } catch (e) {
-//           // ignore
-//         }
-//       }
-
-//       // Final fallback: look for any password-like input (type=password)
-//       if (!passHandle) {
-//         passHandle = await page.$('input[type="password"]');
-//         if (passHandle) console.log('  ℹ️ Found password input by fallback selector input[type="password"]');
-//       }
-//     }
-
-//     // Type into password (if present)
-//     if (passHandle) {
-//       try {
-//         await passHandle.click({ clickCount: 3 });
-//         await passHandle.type(password, { delay: 50 });
-//       } catch (e) {
-//         console.warn('  ⚠️ Error interacting with password field:', e.message);
-//       }
-//     } else {
-//       console.warn('  ⚠️ Password input not found with selectors (after trying two-step flow). Selector was:', passwordSelector);
-//     }
-
-//     // Click submit
-//     const submitHandle = await page.$(submitSelector);
-//     if (submitHandle) {
-//       await Promise.all([
-//         page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {}),
-//         submitHandle.click().catch(() => {}),
-//       ]);
-//     } else {
-//       // As fallback, press Enter in password field
-//       if (passHandle) {
-//         await Promise.all([
-//           page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {}),
-//           passHandle.press('Enter').catch(() => {}),
-//         ]);
-//       } else {
-//         console.warn('  ⚠️ Submit button not found with selectors:', submitSelector);
-//       }
-//     }
-
-//     // Wait for post-login indicator (if provided)
-//     const postLoginSelector = process.env.LOGIN_POST_SELECTOR || CONFIG.login.postLoginSelector;
-//     await page.waitForSelector(postLoginSelector, { timeout: 10000 }).catch(() => {});
-
-//     console.log('✅ Login attempt finished (check if logged in)');
-//     return true;
-//   } catch (err) {
-//     console.error('❌ Login error:', err.message);
-//     return false;
-//   }
-// }
-
-// SSO
-// Attempt to login using credentials from env vars
+// SSO: Attempt to login using credentials from env vars
 async function login(page) {
   const username = process.env.LOGIN_USERNAME;
   const password = process.env.LOGIN_PASSWORD;
@@ -701,35 +525,35 @@ async function main() {
     const articles = await getArticleLinks(page);
     console.log("articles =", articles);
 
-    // if (articles.length === 0) {
-    //   console.log("⚠️  No articles found. Check the selectors.");
-    //   return;
-    // }
+    if (articles.length === 0) {
+      console.log("⚠️  No articles found. Check the selectors.");
+      return;
+    }
 
-    // console.log(`\n📚 Starting to scrape ${articles.length} articles...\n`);
+    console.log(`\n📚 Starting to scrape ${articles.length} articles...\n`);
 
-    // // Scrape each article
-    // let successCount = 0;
-    // for (let i = 0; i < articles.length; i++) {
-    //   const article = articles[i];
-    //   console.log(`[${i + 1}/${articles.length}]`);
+    // Scrape each article
+    let successCount = 0;
+    for (let i = 0; i < articles.length; i++) {
+      const article = articles[i];
+      console.log(`[${i + 1}/${articles.length}]`);
 
-    //   const result = await scrapeArticle(page, article.url, article.title);
+      const result = await scrapeArticle(page, article.url, article.title);
 
-    //   if (result) {
-    //     successCount++;
-    //   }
+      if (result) {
+        successCount++;
+      }
 
-    //   // Delay between requests to be respectful
-    //   if (i < articles.length - 1) {
-    //     await delay(CONFIG.delayBetweenRequests);
-    //   }
-    // }
+      // Delay between requests to be respectful
+      if (i < articles.length - 1) {
+        await delay(CONFIG.delayBetweenRequests);
+      }
+    }
 
-    // console.log(`\n✅ Scraping complete!`);
-    // console.log(
-    //   `   Successfully scraped: ${successCount}/${articles.length} articles`
-    // );
+    console.log(`\n✅ Scraping complete!`);
+    console.log(
+      `   Successfully scraped: ${successCount}/${articles.length} articles`
+    );
   } catch (error) {
     console.error("❌ Fatal error:", error);
   } finally {
@@ -740,3 +564,13 @@ async function main() {
 
 // Run the scraper
 main().catch(console.error);
+
+// // close after 10 seconds of no activity
+// let lastActivity = Date.now();
+// const activityInterval = setInterval(() => {
+//   if (Date.now() - lastActivity > 10000) {
+//     console.log("⏲️  No activity for 10 seconds, closing browser");
+//     browser.close().catch(() => {});
+//     clearInterval(activityInterval);
+//   }
+// }, 5000);
