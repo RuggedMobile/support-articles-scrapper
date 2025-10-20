@@ -1,5 +1,5 @@
 {
-  "name": "support-scrapper",
+  "name": "support-articles-scrapper",
   "type": "module",
   "version": "1.0.0",
   "main": "index.js",
