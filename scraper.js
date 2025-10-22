@@ -23,8 +23,8 @@ const CONFIG = {
   baseUrl: "https://help.appenate.com",
   kbUrl: "https://help.appenate.com/kb/",
   imageDir: "./downloaded_images",
-  delayBetweenRequests: 2000, // 2 seconds between requests
-  headless: false,
+  delayBetweenRequests: 5000, // 5 seconds between requests (5 seconds seems to work; less than that probably wont allow the previous request to finish)
+  headless: true,
   // Login configuration: selectors can be customized via env vars if needed
   login: {
     url: null, // defaults to `${baseUrl}/login` when null
@@ -137,7 +137,7 @@ async function getArticleLinks(page) {
   );
 
   console.log(`✅ Found ${uniqueArticles.length} articles`);
-  return [uniqueArticles[0]];
+  return uniqueArticles;
 }
 
 // SSO: Attempt to login using credentials from env vars
@@ -523,7 +523,6 @@ async function main() {
   try {
     // Get all article links
     const articles = await getArticleLinks(page);
-    console.log("articles =", articles);
 
     if (articles.length === 0) {
       console.log("⚠️  No articles found. Check the selectors.");
